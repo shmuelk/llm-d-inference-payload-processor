@@ -30,6 +30,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/metrics/filters"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
@@ -38,6 +39,7 @@ import (
 	logutil "github.com/llm-d/llm-d-inference-payload-processor/pkg/common/observability/logging"
 	"github.com/llm-d/llm-d-inference-payload-processor/pkg/common/observability/profiling"
 	"github.com/llm-d/llm-d-inference-payload-processor/pkg/common/observability/tracing"
+	"github.com/llm-d/llm-d-inference-payload-processor/pkg/config/loader"
 	"github.com/llm-d/llm-d-inference-payload-processor/pkg/framework"
 	"github.com/llm-d/llm-d-inference-payload-processor/pkg/metrics"
 	"github.com/llm-d/llm-d-inference-payload-processor/pkg/plugins/basemodelextractor"
@@ -169,10 +171,10 @@ func (r *Runner) Run(ctx context.Context) error {
 		}
 	}
 
-	handle := framework.NewHandle(ctx, mgr)
-
-	// Register factories for all known in-tree plugins
-	r.registerInTreePlugins()
+	err = r.loadConfiguration(ctx, opts, mgr)
+	if err != nil {
+		return err
+	}
 
 	// Construct plugin instances for the in-tree plugins that are (1) registered and (2) requested via the --plugin flags
 	if len(opts.PluginSpecs) == 0 {
@@ -197,7 +199,7 @@ func (r *Runner) Run(ctx context.Context) error {
 		r.requestPlugins = append(r.requestPlugins, baseModelToHeaderPlugin)
 	} else {
 		setupLog.Info("plugins are specified, running with the specified plugins.")
-
+		handle := framework.NewHandle(ctx, mgr)
 		for _, s := range opts.PluginSpecs {
 			factory, ok := framework.Registry[s.Type]
 			if !ok {
@@ -246,6 +248,34 @@ func (r *Runner) Run(ctx context.Context) error {
 	}
 	setupLog.Info("manager terminated")
 	return nil
+}
+
+func (r *Runner) loadConfiguration(ctx context.Context, opts *runserver.Options, mgr manager.Manager) error {
+	handle := framework.NewHandle(ctx, mgr)
+
+	logger := log.FromContext(ctx)
+
+	var configBytes []byte
+	if opts.ConfigText != "" {
+		configBytes = []byte(opts.ConfigText)
+	} else if opts.ConfigFile != "" { // if config was specified through a file
+		var err error
+		configBytes, err = os.ReadFile(opts.ConfigFile)
+		if err != nil {
+			return fmt.Errorf("failed to load config from a file '%s' - %w", opts.ConfigFile, err)
+		}
+	}
+
+	// Register factories for all known in-tree plugins
+	r.registerInTreePlugins()
+
+	_, err := loader.LoadConfiguration(configBytes, handle, logger)
+	//if err == nil {
+	//	r.requestPlugins = theConfig.RequestPlugins
+	//	r.responsePlugins = theConfig.ResponsePlugins
+	//}
+
+	return err
 }
 
 // registerInTreePlugins registers the factory functions of all known payload processor plugins
