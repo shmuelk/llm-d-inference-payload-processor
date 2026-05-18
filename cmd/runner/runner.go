@@ -292,10 +292,10 @@ func (r *Runner) loadConfiguration(ctx context.Context, opts *runserver.Options,
 	r.registerInTreePlugins()
 
 	_, err := loader.LoadConfiguration(configBytes, handle, logger)
-	//if err == nil {
-	//	r.requestPlugins = theConfig.RequestPlugins
-	//	r.responsePlugins = theConfig.ResponsePlugins
-	//}
+	// if err == nil {
+	//     r.requestPlugins = theConfig.RequestPlugins
+	//	   r.responsePlugins = theConfig.ResponsePlugins
+	// }
 
 	return err
 }
