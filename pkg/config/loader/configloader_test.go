@@ -130,7 +130,7 @@ func TestInstantiatePlugins(t *testing.T) {
 		// --- Success Scenarios ---
 
 		{
-			name:       "Successfull load of plugins",
+			name:       "Successful load of plugins",
 			configText: successConfigText,
 			wantErr:    false,
 			validate: func(t *testing.T, handle framework.Handle) {
