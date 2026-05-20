@@ -16,7 +16,7 @@ limitations under the License.
 
 package datastore
 
-import "github.com/llm-d/llm-d-inference-payload-processor/pkg/framework/datalayer"
+import "github.com/llm-d/llm-d-inference-payload-processor/pkg/framework/interface/datalayer"
 
 // Datastore is the interface for reading and updating the model store.
 type Datastore interface {

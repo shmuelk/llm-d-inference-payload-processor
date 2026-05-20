@@ -20,7 +20,7 @@ import (
 	"sync"
 
 	"github.com/llm-d/llm-d-inference-payload-processor/pkg/datastore"
-	"github.com/llm-d/llm-d-inference-payload-processor/pkg/framework/datalayer"
+	"github.com/llm-d/llm-d-inference-payload-processor/pkg/framework/interface/datalayer"
 )
 
 // store is a thread-safe in-memory registry of Model entries keyed by model name.
