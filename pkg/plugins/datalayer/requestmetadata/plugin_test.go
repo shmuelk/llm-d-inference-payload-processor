@@ -18,55 +18,34 @@ package requestmetadata
 
 import (
 	"context"
-	"sync"
 	"testing"
 	"time"
 
+	"github.com/llm-d/llm-d-inference-payload-processor/pkg/datastore"
 	"github.com/llm-d/llm-d-inference-payload-processor/pkg/framework"
-	"github.com/llm-d/llm-d-inference-payload-processor/pkg/framework/datalayer"
+	dlsrc "github.com/llm-d/llm-d-inference-payload-processor/pkg/framework/datalayer/datasource"
 )
 
-// fakeDataStore is an in-memory DataStore for tests.
-type fakeDataStore struct {
-	mu     sync.Mutex
-	models map[string]datalayer.Model
-}
-
-func newFakeDataStore() *fakeDataStore {
-	return &fakeDataStore{models: make(map[string]datalayer.Model)}
-}
-
-func (f *fakeDataStore) GetOrCreateModel(name string) datalayer.Model {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	if m, ok := f.models[name]; ok {
-		return m
-	}
-	m := datalayer.NewModel(name)
-	f.models[name] = m
-	return m
-}
-
 // makeRequestEvent creates a RequestEventType event with model and max_tokens.
-func makeRequestEvent(model string, maxTokens float64) datalayer.Event {
+func makeRequestEvent(model string, maxTokens float64) dlsrc.Event {
 	req := framework.NewInferenceRequest()
 	req.Body["model"] = model
 	req.Body["max_tokens"] = maxTokens
-	return datalayer.Event{
-		Type:    datalayer.RequestEventType,
-		Payload: datalayer.RequestPayload{Request: req},
+	return dlsrc.Event{
+		Type:    dlsrc.RequestEventType,
+		Payload: dlsrc.RequestPayload{Request: req},
 	}
 }
 
 // makeResponseEvent creates a ResponseEventType event with model, duration, and max_tokens.
 // maxTokens mirrors the original request's max_tokens so the extractor can decrement correctly.
-func makeResponseEvent(model string, durationMs int, maxTokens float64) datalayer.Event {
+func makeResponseEvent(model string, durationMs int, maxTokens float64) dlsrc.Event {
 	req := framework.NewInferenceRequest()
 	req.Body["model"] = model
 	req.Body["max_tokens"] = maxTokens
-	return datalayer.Event{
-		Type: datalayer.ResponseEventType,
-		Payload: datalayer.ResponsePayload{
+	return dlsrc.Event{
+		Type: dlsrc.ResponseEventType,
+		Payload: dlsrc.ResponsePayload{
 			Request:  req,
 			Response: framework.NewInferenceResponse(),
 			Duration: time.Duration(durationMs) * time.Millisecond,
@@ -74,8 +53,8 @@ func makeResponseEvent(model string, durationMs int, maxTokens float64) datalaye
 	}
 }
 
-// getRequestMetadata asserts the request-metadata attribute exists for model and returns it.
-func getRequestMetadata(t testing.TB, ds *fakeDataStore, model string) RequestMetadataCount {
+// getInflightRequests asserts the inflight-requests attribute exists for model and returns it.
+func getRequestMetadata(t testing.TB, ds datastore.Datastore, model string) RequestMetadataCount {
 	t.Helper()
 	val, ok := ds.GetOrCreateModel(model).GetAttributes().Get(RequestMetadataAttributeKey)
 	if !ok {
@@ -88,16 +67,16 @@ func getRequestMetadata(t testing.TB, ds *fakeDataStore, model string) RequestMe
 	return rc
 }
 
-func newRequestMetadataTest(t *testing.T) (*RequestMetadataExtractor, *fakeDataStore) {
+func newRequestMetadataTest(t *testing.T) (*RequestMetadataExtractor, datastore.Datastore) {
 	t.Helper()
-	ds := newFakeDataStore()
+	ds := datastore.NewFakeDataStore()
 	return NewRequestMetadataExtractor(ds), ds
 }
 
 func TestRequestIncrementsCounter(t *testing.T) {
 	ext, ds := newRequestMetadataTest(t)
 
-	batch := []datalayer.Event{makeRequestEvent("m1", 100)}
+	batch := []dlsrc.Event{makeRequestEvent("m1", 100)}
 	if err := ext.Extract(context.Background(), batch); err != nil {
 		t.Fatalf("Extract failed: %v", err)
 	}
@@ -115,7 +94,7 @@ func TestResponseDecrementsCounter(t *testing.T) {
 	ext, ds := newRequestMetadataTest(t)
 
 	// Response carries the original request's max_tokens so the extractor can decrement correctly.
-	batch := []datalayer.Event{
+	batch := []dlsrc.Event{
 		makeRequestEvent("m1", 100),
 		makeResponseEvent("m1", 50, 100),
 	}
@@ -136,7 +115,7 @@ func TestCounterFloorsAtZero(t *testing.T) {
 	ext, ds := newRequestMetadataTest(t)
 
 	// Response with no prior request — both counters must floor at zero.
-	batch := []datalayer.Event{makeResponseEvent("m1", 50, 100)}
+	batch := []dlsrc.Event{makeResponseEvent("m1", 50, 100)}
 	if err := ext.Extract(context.Background(), batch); err != nil {
 		t.Fatalf("Extract failed: %v", err)
 	}
@@ -153,7 +132,7 @@ func TestCounterFloorsAtZero(t *testing.T) {
 func TestRequestMetadataMultipleModels(t *testing.T) {
 	ext, ds := newRequestMetadataTest(t)
 
-	batch := []datalayer.Event{
+	batch := []dlsrc.Event{
 		makeRequestEvent("m1", 10),
 		makeRequestEvent("m2", 20),
 	}
@@ -175,14 +154,12 @@ func TestRequestMetadataMultipleModels(t *testing.T) {
 func TestRequestMetadataUnknownEventTypeIgnored(t *testing.T) {
 	ext, ds := newRequestMetadataTest(t)
 
-	batch := []datalayer.Event{{Type: "unknown"}}
+	batch := []dlsrc.Event{{Type: "unknown"}}
 	if err := ext.Extract(context.Background(), batch); err != nil {
 		t.Fatalf("Extract failed: %v", err)
 	}
 
-	ds.mu.Lock()
-	modelCount := len(ds.models)
-	ds.mu.Unlock()
+	modelCount := len(ds.Models())
 	if modelCount != 0 {
 		t.Errorf("expected no models in datastore, got %d", modelCount)
 	}
@@ -194,16 +171,14 @@ func TestRequestMetadataMissingModelFieldIgnored(t *testing.T) {
 	// Payload without a "model" key — no counter should be updated.
 	req := framework.NewInferenceRequest()
 	req.Body["max_tokens"] = float64(50)
-	batch := []datalayer.Event{
-		{Type: datalayer.RequestEventType, Payload: datalayer.RequestPayload{Request: req}},
+	batch := []dlsrc.Event{
+		{Type: dlsrc.RequestEventType, Payload: dlsrc.RequestPayload{Request: req}},
 	}
 	if err := ext.Extract(context.Background(), batch); err != nil {
 		t.Fatalf("Extract failed: %v", err)
 	}
 
-	ds.mu.Lock()
-	modelCount := len(ds.models)
-	ds.mu.Unlock()
+	modelCount := len(ds.Models())
 	if modelCount != 0 {
 		t.Errorf("expected no models in datastore, got %d", modelCount)
 	}

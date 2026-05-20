@@ -20,8 +20,10 @@ import (
 	"context"
 	"encoding/json"
 
+	"github.com/llm-d/llm-d-inference-payload-processor/pkg/datastore"
 	"github.com/llm-d/llm-d-inference-payload-processor/pkg/framework"
 	"github.com/llm-d/llm-d-inference-payload-processor/pkg/framework/datalayer"
+	dlsrc "github.com/llm-d/llm-d-inference-payload-processor/pkg/framework/datalayer/datasource"
 )
 
 const (
@@ -33,7 +35,7 @@ const (
 )
 
 // compile-time interface assertion
-var _ datalayer.Extractor = &RequestMetadataExtractor{}
+var _ dlsrc.Extractor = &RequestMetadataExtractor{}
 
 // ExtractorFactory creates a RequestMetadataExtractor with a nil DataStore.
 // The factory path is limited: the DataStore is not available via framework.Handle,
@@ -62,14 +64,14 @@ func (r RequestMetadataCount) Clone() datalayer.Cloneable { return r }
 // synthetic ResponseEventType in its error/EOF path to keep counts accurate.
 type RequestMetadataExtractor struct {
 	typedName framework.TypedName
-	dataStore datalayer.DataStore
+	ds        datastore.Datastore
 	counters  map[string]RequestMetadataCount
 }
 
-func NewRequestMetadataExtractor(ds datalayer.DataStore) *RequestMetadataExtractor {
+func NewRequestMetadataExtractor(ds datastore.Datastore) *RequestMetadataExtractor {
 	return &RequestMetadataExtractor{
 		typedName: framework.TypedName{Type: PluginType, Name: PluginType},
-		dataStore: ds,
+		ds:        ds,
 		counters:  make(map[string]RequestMetadataCount),
 	}
 }
@@ -82,13 +84,13 @@ func (e *RequestMetadataExtractor) WithName(name string) *RequestMetadataExtract
 	return e
 }
 
-func (e *RequestMetadataExtractor) Extract(_ context.Context, events []datalayer.Event) error {
+func (e *RequestMetadataExtractor) Extract(_ context.Context, events []dlsrc.Event) error {
 	updated := map[string]RequestMetadataCount{}
 
 	for _, ev := range events {
 		switch ev.Type {
-		case datalayer.RequestEventType:
-			p, ok := ev.Payload.(datalayer.RequestPayload)
+		case dlsrc.RequestEventType:
+			p, ok := ev.Payload.(dlsrc.RequestPayload)
 			if !ok {
 				continue
 			}
@@ -103,8 +105,8 @@ func (e *RequestMetadataExtractor) Extract(_ context.Context, events []datalayer
 			e.counters[model] = c
 			updated[model] = c
 
-		case datalayer.ResponseEventType:
-			p, ok := ev.Payload.(datalayer.ResponsePayload)
+		case dlsrc.ResponseEventType:
+			p, ok := ev.Payload.(dlsrc.ResponsePayload)
 			if !ok {
 				continue
 			}
@@ -122,7 +124,7 @@ func (e *RequestMetadataExtractor) Extract(_ context.Context, events []datalayer
 	}
 
 	for model, c := range updated {
-		e.dataStore.GetOrCreateModel(model).GetAttributes().Put(RequestMetadataAttributeKey, c)
+		e.ds.GetOrCreateModel(model).GetAttributes().Put(RequestMetadataAttributeKey, c)
 	}
 	return nil
 }
