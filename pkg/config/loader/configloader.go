@@ -27,7 +27,7 @@ import (
 
 	configapi "github.com/llm-d/llm-d-inference-payload-processor/apix/config/v1alpha1"
 	config "github.com/llm-d/llm-d-inference-payload-processor/pkg/config"
-	"github.com/llm-d/llm-d-inference-payload-processor/pkg/framework"
+	"github.com/llm-d/llm-d-inference-payload-processor/pkg/framework/interface/plugin"
 )
 
 var (
@@ -38,7 +38,7 @@ func init() {
 	utilruntime.Must(configapi.Install(scheme))
 }
 
-func LoadConfiguration(configBytes []byte, handle framework.Handle, logger logr.Logger) (*config.Config, error) {
+func LoadConfiguration(configBytes []byte, handle plugin.Handle, logger logr.Logger) (*config.Config, error) {
 	rawConfig, err := loadRawConfiguration(configBytes, logger)
 	if err != nil {
 		return nil, err
@@ -72,7 +72,7 @@ func loadRawConfiguration(configBytes []byte, logger logr.Logger) (*configapi.Pa
 	return rawConfig, err
 }
 
-func instantiatePlugins(configuredPlugins []configapi.PluginSpec, handle framework.Handle) error {
+func instantiatePlugins(configuredPlugins []configapi.PluginSpec, handle plugin.Handle) error {
 	pluginNames := sets.New[string]()
 	for _, spec := range configuredPlugins {
 		if spec.Type == "" {
@@ -83,7 +83,7 @@ func instantiatePlugins(configuredPlugins []configapi.PluginSpec, handle framewo
 		}
 		pluginNames.Insert(spec.Name)
 
-		factory, ok := framework.Registry[spec.Type]
+		factory, ok := plugin.Registry[spec.Type]
 		if !ok {
 			return fmt.Errorf("plugin type '%s' is not registered", spec.Type)
 		}

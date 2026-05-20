@@ -16,14 +16,14 @@ limitations under the License.
 
 package config
 
-import "github.com/llm-d/llm-d-inference-payload-processor/pkg/framework"
+import "github.com/llm-d/llm-d-inference-payload-processor/pkg/framework/interface/requesthandling"
 
 // Config contains the final configuration loaded by the configuration loader
 type Config struct {
 	// RequestPlugins are the request processing plugin instances executed by the request handler,
 	// in the same order provided in the configuration file.
-	RequestPlugins []framework.RequestProcessor
+	RequestPlugins []requesthandling.RequestProcessor
 	// ResponsePlugins are the response processing plugin instances executed by the response handler,
 	// in the same order provided in the configuration file.
-	ResponsePlugins []framework.ResponseProcessor
+	ResponsePlugins []requesthandling.ResponseProcessor
 }

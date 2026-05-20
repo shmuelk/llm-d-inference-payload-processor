@@ -27,9 +27,10 @@ import (
 	"github.com/google/go-cmp/cmp"
 	configapi "github.com/llm-d/llm-d-inference-payload-processor/apix/config/v1alpha1"
 	"github.com/llm-d/llm-d-inference-payload-processor/pkg/common/observability/logging"
-	"github.com/llm-d/llm-d-inference-payload-processor/pkg/framework"
 	"github.com/llm-d/llm-d-inference-payload-processor/pkg/framework/datalayer"
-	"github.com/llm-d/llm-d-inference-payload-processor/pkg/framework/modelselector"
+	"github.com/llm-d/llm-d-inference-payload-processor/pkg/framework/interface/modelselector"
+	"github.com/llm-d/llm-d-inference-payload-processor/pkg/framework/interface/plugin"
+	"github.com/llm-d/llm-d-inference-payload-processor/pkg/framework/interface/requesthandling"
 	"github.com/llm-d/llm-d-inference-payload-processor/pkg/plugins/basemodelextractor"
 	"github.com/llm-d/llm-d-inference-payload-processor/pkg/plugins/bodyfieldtoheader"
 )
@@ -125,7 +126,7 @@ func TestInstantiatePlugins(t *testing.T) {
 		name       string
 		configText string
 		wantErr    bool
-		validate   func(t *testing.T, handle framework.Handle)
+		validate   func(t *testing.T, handle plugin.Handle)
 	}{
 		// --- Success Scenarios ---
 
@@ -133,7 +134,7 @@ func TestInstantiatePlugins(t *testing.T) {
 			name:       "Successful load of plugins",
 			configText: successConfigText,
 			wantErr:    false,
-			validate: func(t *testing.T, handle framework.Handle) {
+			validate: func(t *testing.T, handle plugin.Handle) {
 				loadedPlugins := handle.GetAllPlugins()
 				require.Len(t, loadedPlugins, 5)
 				require.NotNil(t, handle.Plugin("test1"), "Explicit test plugin should be instantiated")
@@ -181,7 +182,7 @@ func TestInstantiatePlugins(t *testing.T) {
 			}
 
 			// 2. Instantiate
-			handle := framework.NewHandle(context.Background(), nil)
+			handle := plugin.NewHandle(context.Background(), nil, nil)
 			err = instantiatePlugins(rawConfig.Plugins, handle)
 
 			if tc.wantErr {
@@ -200,18 +201,18 @@ func TestInstantiatePlugins(t *testing.T) {
 // --- Mocks ---
 
 type mockPlugin struct {
-	t framework.TypedName
+	t plugin.TypedName
 }
 
-func (m *mockPlugin) TypedName() framework.TypedName { return m.t }
+func (m *mockPlugin) TypedName() plugin.TypedName { return m.t }
 
 // Mock RequestProcessor
 type mockRequestProcessor struct{ mockPlugin }
 
 // compile-time type assertion
-var _ framework.RequestProcessor = &mockRequestProcessor{}
+var _ requesthandling.RequestProcessor = &mockRequestProcessor{}
 
-func (m *mockRequestProcessor) ProcessRequest(ctx context.Context, cycleState *framework.CycleState, request *framework.InferenceRequest) error {
+func (m *mockRequestProcessor) ProcessRequest(ctx context.Context, cycleState *plugin.CycleState, request *requesthandling.InferenceRequest) error {
 	return nil
 }
 
@@ -219,9 +220,9 @@ func (m *mockRequestProcessor) ProcessRequest(ctx context.Context, cycleState *f
 type mockResponseProcessor struct{ mockPlugin }
 
 // compile-time type assertion
-var _ framework.ResponseProcessor = &mockResponseProcessor{}
+var _ requesthandling.ResponseProcessor = &mockResponseProcessor{}
 
-func (m *mockResponseProcessor) ProcessResponse(ctx context.Context, cycleState *framework.CycleState, request *framework.InferenceResponse) error {
+func (m *mockResponseProcessor) ProcessResponse(ctx context.Context, cycleState *plugin.CycleState, request *requesthandling.InferenceResponse) error {
 	return nil
 }
 
@@ -231,7 +232,7 @@ type mockScorer struct{ mockPlugin }
 // compile-time type assertion
 var _ modelselector.Scorer = &mockScorer{}
 
-func (m *mockScorer) Score(ctx context.Context, cycleState *framework.CycleState, request *framework.InferenceRequest, models []datalayer.Model) map[datalayer.Model]float64 {
+func (m *mockScorer) Score(ctx context.Context, cycleState *plugin.CycleState, request *requesthandling.InferenceRequest, models []datalayer.Model) map[datalayer.Model]float64 {
 	return nil
 }
 
@@ -241,7 +242,7 @@ type mockPicker struct{ mockPlugin }
 // compile-time type assertion
 var _ modelselector.Picker = &mockPicker{}
 
-func (m *mockPicker) Pick(ctx context.Context, cycleState *framework.CycleState, scoredModels []*modelselector.ScoredModel) *modelselector.ProfileRunResult {
+func (m *mockPicker) Pick(ctx context.Context, cycleState *plugin.CycleState, scoredModels []*modelselector.ScoredModel) *modelselector.ProfileRunResult {
 	return nil
 }
 
@@ -249,27 +250,27 @@ func registerTestPlugins(t *testing.T) {
 	t.Helper()
 
 	// Register standard test mocks.
-	framework.Register(testPluginType,
-		func(name string, params json.RawMessage, _ framework.Handle) (framework.Plugin, error) {
-			return &mockPlugin{t: framework.TypedName{Name: name, Type: testPluginType}}, nil
+	plugin.Register(testPluginType,
+		func(name string, params json.RawMessage, _ plugin.Handle) (plugin.Plugin, error) {
+			return &mockPlugin{t: plugin.TypedName{Name: name, Type: testPluginType}}, nil
 		})
 
-	framework.Register(testRequestProcType,
-		func(name string, params json.RawMessage, _ framework.Handle) (framework.Plugin, error) {
-			return &mockRequestProcessor{mockPlugin{t: framework.TypedName{Name: name, Type: testRequestProcType}}}, nil
+	plugin.Register(testRequestProcType,
+		func(name string, params json.RawMessage, _ plugin.Handle) (plugin.Plugin, error) {
+			return &mockRequestProcessor{mockPlugin{t: plugin.TypedName{Name: name, Type: testRequestProcType}}}, nil
 		})
 
-	framework.Register(testResponseProcType,
-		func(name string, params json.RawMessage, _ framework.Handle) (framework.Plugin, error) {
-			return &mockResponseProcessor{mockPlugin{t: framework.TypedName{Name: name, Type: testResponseProcType}}}, nil
+	plugin.Register(testResponseProcType,
+		func(name string, params json.RawMessage, _ plugin.Handle) (plugin.Plugin, error) {
+			return &mockResponseProcessor{mockPlugin{t: plugin.TypedName{Name: name, Type: testResponseProcType}}}, nil
 		})
 
-	framework.Register(testPickerType,
-		func(name string, params json.RawMessage, _ framework.Handle) (framework.Plugin, error) {
-			return &mockPicker{mockPlugin{t: framework.TypedName{Name: name, Type: testPickerType}}}, nil
+	plugin.Register(testPickerType,
+		func(name string, params json.RawMessage, _ plugin.Handle) (plugin.Plugin, error) {
+			return &mockPicker{mockPlugin{t: plugin.TypedName{Name: name, Type: testPickerType}}}, nil
 		})
 
-	framework.Register(testScorerType, func(name string, params json.RawMessage, _ framework.Handle) (framework.Plugin, error) {
+	plugin.Register(testScorerType, func(name string, params json.RawMessage, _ plugin.Handle) (plugin.Plugin, error) {
 		// Attempt to unmarshal to trigger errors for invalid JSON in tests.
 		if len(params) > 0 {
 			var p struct {
@@ -279,6 +280,6 @@ func registerTestPlugins(t *testing.T) {
 				return nil, err
 			}
 		}
-		return &mockScorer{mockPlugin{t: framework.TypedName{Name: name, Type: testScorerType}}}, nil
+		return &mockScorer{mockPlugin{t: plugin.TypedName{Name: name, Type: testScorerType}}}, nil
 	})
 }
