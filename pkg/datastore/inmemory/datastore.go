@@ -19,7 +19,6 @@ package inmemory
 import (
 	"sync"
 
-	"github.com/llm-d/llm-d-inference-payload-processor/pkg/datastore"
 	"github.com/llm-d/llm-d-inference-payload-processor/pkg/framework/interface/datalayer"
 )
 
@@ -35,7 +34,7 @@ type store struct {
 }
 
 // NewDatastore creates and returns a new in-memory Datastore instance.
-func NewDatastore() datastore.Datastore {
+func NewDatastore() datalayer.Datastore {
 	return &store{models: make(map[string]datalayer.Model)}
 }
 
