@@ -22,8 +22,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	configapi "github.com/llm-d/llm-d-inference-payload-processor/apix/config/v1alpha1"
-	"github.com/llm-d/llm-d-inference-payload-processor/pkg/plugins/basemodelextractor"
-	"github.com/llm-d/llm-d-inference-payload-processor/pkg/plugins/bodyfieldtoheader"
+	"github.com/llm-d/llm-d-inference-payload-processor/pkg/framework/plugins/requesthandling/basemodelextractor"
+	"github.com/llm-d/llm-d-inference-payload-processor/pkg/framework/plugins/requesthandling/bodyfieldtoheader"
 )
 
 func loadDefaultConfig() *configapi.PayloadProcessorConfig {

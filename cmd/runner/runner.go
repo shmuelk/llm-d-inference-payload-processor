@@ -40,8 +40,8 @@ import (
 	"github.com/llm-d/llm-d-inference-payload-processor/pkg/common/observability/profiling"
 	"github.com/llm-d/llm-d-inference-payload-processor/pkg/common/observability/tracing"
 	"github.com/llm-d/llm-d-inference-payload-processor/pkg/config/loader"
-	"github.com/llm-d/llm-d-inference-payload-processor/pkg/datastore"
 	"github.com/llm-d/llm-d-inference-payload-processor/pkg/datastore/inmemory"
+	"github.com/llm-d/llm-d-inference-payload-processor/pkg/framework/interface/datalayer"
 	"github.com/llm-d/llm-d-inference-payload-processor/pkg/framework/interface/plugin"
 	"github.com/llm-d/llm-d-inference-payload-processor/pkg/framework/interface/requesthandling"
 	notificationsource "github.com/llm-d/llm-d-inference-payload-processor/pkg/framework/plugins/datalayer/notificationsource"
@@ -272,7 +272,7 @@ func (r *Runner) Run(ctx context.Context) error {
 	return nil
 }
 
-func (r *Runner) loadConfiguration(ctx context.Context, opts *runserver.Options, mgr manager.Manager, ds datastore.Datastore) error {
+func (r *Runner) loadConfiguration(ctx context.Context, opts *runserver.Options, mgr manager.Manager, ds datalayer.Datastore) error {
 	handle := plugin.NewHandle(ctx, mgr, ds)
 
 	logger := log.FromContext(ctx)
