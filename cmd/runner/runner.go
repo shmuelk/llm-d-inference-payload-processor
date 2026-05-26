@@ -22,15 +22,14 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/go-logr/logr"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/spf13/pflag"
 	"google.golang.org/grpc"
 	healthPb "google.golang.org/grpc/health/grpc_health_v1"
 	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
-	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/metrics/filters"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
@@ -179,7 +178,7 @@ func (r *Runner) Run(ctx context.Context) error {
 
 	ds := inmemory.NewDatastore()
 
-	err = r.loadConfiguration(ctx, opts, mgr, ds)
+	err = r.loadConfiguration(ctx, opts, mgr, ds, setupLog)
 	if err != nil {
 		return err
 	}
@@ -225,10 +224,8 @@ func (r *Runner) Run(ctx context.Context) error {
 	return nil
 }
 
-func (r *Runner) loadConfiguration(ctx context.Context, opts *runserver.Options, mgr manager.Manager, ds datalayer.Datastore) error {
+func (r *Runner) loadConfiguration(ctx context.Context, opts *runserver.Options, mgr manager.Manager, ds datalayer.Datastore, logger logr.Logger) error {
 	handle := plugin.NewHandle(ctx, mgr, ds)
-
-	logger := log.FromContext(ctx)
 
 	var configBytes []byte
 	if opts.ConfigText != "" {
@@ -237,6 +234,7 @@ func (r *Runner) loadConfiguration(ctx context.Context, opts *runserver.Options,
 		var err error
 		configBytes, err = os.ReadFile(opts.ConfigFile)
 		if err != nil {
+			logger.Error(err, "failed to load config from a file", "file", opts.ConfigFile)
 			return fmt.Errorf("failed to load config from a file '%s' - %w", opts.ConfigFile, err)
 		}
 	}
@@ -244,11 +242,19 @@ func (r *Runner) loadConfiguration(ctx context.Context, opts *runserver.Options,
 	// Register factories for all known in-tree plugins
 	r.registerInTreePlugins()
 
-	_, err := loader.LoadConfiguration(configBytes, handle, logger)
-	// if err == nil {
-	//     r.requestPlugins = theConfig.RequestPlugins
-	//	   r.responsePlugins = theConfig.ResponsePlugins
-	// }
+	theConfig, err := loader.LoadConfiguration(configBytes, handle, logger)
+	if err == nil {
+		// Hack for now until the ProfilePicker is supported
+		var profileName = ""
+		for name := range theConfig.Profiles {
+			profileName = name
+			break
+		}
+		logger.Info("Running with", "profile", profileName)
+
+		r.requestPlugins = theConfig.Profiles[profileName].RequestPlugins
+		r.responsePlugins = theConfig.Profiles[profileName].ResponsePlugins
+	}
 
 	return err
 }
