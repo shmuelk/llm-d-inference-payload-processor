@@ -57,25 +57,24 @@ type PayloadProcessorConfig struct {
 }
 
 func (cfg PayloadProcessorConfig) String() string {
-	var parts []string
+	contents := strings.Builder{}
 
-	if len(cfg.Plugins) > 0 {
-		parts = append(parts, fmt.Sprintf("Plugins: %v", cfg.Plugins))
-	}
+	contents.WriteString(fmt.Sprintf("Plugins: %v", cfg.Plugins))
+
 	if cfg.PreProcessing != nil {
-		parts = append(parts, fmt.Sprintf("PreProcessing: %v", cfg.PreProcessing))
+		contents.WriteString(fmt.Sprintf(", PreProcessing: %v", cfg.PreProcessing))
 	}
 	if cfg.ProfilePicker != nil {
-		parts = append(parts, fmt.Sprintf("ProfilePicker: %v", cfg.ProfilePicker))
+		contents.WriteString(fmt.Sprintf(", ProfilePicker: %v", cfg.ProfilePicker))
 	}
 	if len(cfg.Profiles) > 0 {
-		parts = append(parts, fmt.Sprintf("Profiles: %v", cfg.Profiles))
+		contents.WriteString(fmt.Sprintf(", Profiles: %v", cfg.Profiles))
 	}
 	if cfg.PostProcessing != nil {
-		parts = append(parts, fmt.Sprintf("PostProcessing: %v", cfg.PostProcessing))
+		contents.WriteString(fmt.Sprintf(", PostProcessing: %v", cfg.PostProcessing))
 	}
 
-	return "{" + strings.Join(parts, ", ") + "}"
+	return "{" + contents.String() + "}"
 }
 
 // PluginSpec contains the information that describes a plugin that
