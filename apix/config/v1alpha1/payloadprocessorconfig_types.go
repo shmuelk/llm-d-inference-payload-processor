@@ -18,7 +18,7 @@ limitations under the License.
 //
 // The Kubernetes machinery is used to read this struct from YAML text.
 // HOWEVER, the CRD JSON Schema validation is NOT used as we don't have
-// a real CRD. The Kubernetes validation tags are just for documentaion.
+// a real CRD. The Kubernetes validation tags are just for documentation.
 
 package v1alpha1
 
