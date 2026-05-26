@@ -34,6 +34,26 @@ type PayloadProcessorConfig struct {
 	// +kubebuilder:validation:Required
 	// Plugins is the list of plugins that will be instantiated.
 	Plugins []PluginSpec `json:"plugins"`
+
+	// +optional
+	// Preprocessing is an optional ordered list of references to plugins
+	// that will pre-process incoming requests
+	PreProcessing *PluginRefList `json:"preProcessing"`
+
+	// *optional
+	// ProfilePicker is the plugin that chooses the profile to be used
+	ProfilePicker *PluginRef `json:"profilePicker"`
+
+	// +required
+	// +kubebuilder:validation:Required
+	// Profiles is the list of named Profiles
+	// that will be created.
+	Profiles []Profile `json:"profiles"`
+
+	// +optional
+	// Postprocessing is an optional ordered list of references to plugins
+	// that will post-process incoming requests
+	PostProcessing *PluginRefList `json:"postProcessing"`
 }
 
 func (cfg PayloadProcessorConfig) String() string {
@@ -41,6 +61,18 @@ func (cfg PayloadProcessorConfig) String() string {
 
 	if len(cfg.Plugins) > 0 {
 		parts = append(parts, fmt.Sprintf("Plugins: %v", cfg.Plugins))
+	}
+	if cfg.PreProcessing != nil {
+		parts = append(parts, fmt.Sprintf("PreProcessing: %v", cfg.PreProcessing))
+	}
+	if cfg.ProfilePicker != nil {
+		parts = append(parts, fmt.Sprintf("ProfilePicker: %v", cfg.ProfilePicker))
+	}
+	if len(cfg.Profiles) > 0 {
+		parts = append(parts, fmt.Sprintf("Profiles: %v", cfg.Profiles))
+	}
+	if cfg.PostProcessing != nil {
+		parts = append(parts, fmt.Sprintf("PostProcessing: %v", cfg.PostProcessing))
 	}
 
 	return "{" + strings.Join(parts, ", ") + "}"
@@ -75,5 +107,85 @@ func (ps PluginSpec) String() string {
 	if len(ps.Parameters) > 0 {
 		parts = append(parts, "Parameters: "+string(ps.Parameters))
 	}
+	return "{" + strings.Join(parts, ", ") + "}"
+}
+
+// PluginRefList is a list of references to plugins
+type PluginRefList struct {
+	// +required
+	// +kubebuilder:validation:Required
+	// Plugins is the list of plugins being referenced.
+	Plugins []PluginRef `json:"plugins"`
+}
+
+func (prl PluginRefList) String() string {
+	contents := ""
+	if len(prl.Plugins) > 0 {
+		contents = fmt.Sprintf("Plugins: %v", prl.Plugins)
+	}
+	return fmt.Sprintf("{%s}", contents)
+}
+
+// Profile contains the information to create a Profile
+// entry to be used by the PayloadProcessor.
+type Profile struct {
+	// +required
+	// +kubebuilder:validation:Required
+	// Name specifies the name of this PayloadProcessorProfile
+	Name string `json:"name"`
+
+	// +required
+	// +kubebuilder:validation:Required
+	// Plugins is the list of plugins for this Profile.
+	Plugins ProfilePlugins `json:"plugins"`
+}
+
+func (prof Profile) String() string {
+	var parts []string
+	parts = append(parts, "Name: "+prof.Name)
+	if len(prof.Plugins.Request) > 0 || len(prof.Plugins.Response) > 0 {
+		plugins := ""
+		if len(prof.Plugins.Request) > 0 {
+			plugins += fmt.Sprintf("Request: %v", prof.Plugins.Request)
+		}
+		if len(prof.Plugins.Response) > 0 {
+			if len(plugins) > 0 {
+				plugins += ", "
+			}
+			plugins += fmt.Sprintf("Response: %v", prof.Plugins.Response)
+		}
+		parts = append(parts, fmt.Sprintf("Plugins: {%s}", plugins))
+	}
+	return "{" + strings.Join(parts, ", ") + "}"
+}
+
+// ProfilePlugins lists the set of references to instantiated plugins that will
+// be used for request and response processing respectively.
+type ProfilePlugins struct {
+	// +optional
+	// Request is an optional ordered list of references to plugins
+	// that will process incoming requests before they are sent for inferencing
+	Request []PluginRef `json:"request"`
+
+	// +optional
+	// Response is an optional ordered list of references to plugins
+	// that will process the responses of incoming requests after they are
+	// sent for inferencing
+	Response []PluginRef `json:"response"`
+}
+
+// PluginRef is a reference to an instantiated plugin by name.
+type PluginRef struct {
+	// +required
+	// +kubebuilder:validation:Required
+	// PluginRef specifies a particular Plugin instance. The reference
+	// is to the name of an entry of the Plugins defined in the
+	// configuration's Plugins section.
+	PluginRef string `json:"pluginRef"`
+}
+
+func (pr PluginRef) String() string {
+	var parts []string
+	parts = append(parts, "PluginRef: "+pr.PluginRef)
 	return "{" + strings.Join(parts, ", ") + "}"
 }
