@@ -56,8 +56,6 @@ import (
 	"github.com/llm-d/llm-d-inference-payload-processor/version"
 )
 
-const modelField = "model"
-
 var setupLog = ctrl.Log.WithName("setup")
 
 func NewRunner() *Runner {
@@ -184,51 +182,6 @@ func (r *Runner) Run(ctx context.Context) error {
 	err = r.loadConfiguration(ctx, opts, mgr, ds)
 	if err != nil {
 		return err
-	}
-
-	// Construct plugin instances for the in-tree plugins that are (1) registered and (2) requested via the --plugin flags
-	if len(opts.PluginSpecs) == 0 {
-		setupLog.Info("no plugins are specified. Running with the default plugins")
-
-		modelToHeaderPlugin, err := bodyfieldtoheader.NewBodyFieldToHeaderPlugin(modelField, bodyfieldtoheader.ModelHeader)
-		if err != nil {
-			setupLog.Error(err, "failed to create plugin", "pluginType", bodyfieldtoheader.BodyFieldToHeaderPluginType)
-			return err
-		}
-		r.requestPlugins = append(r.requestPlugins, modelToHeaderPlugin)
-
-		// Create BaseModelToHeaderPlugin instance for extracting the "model" field into X-Gateway-Base-Model-Name
-		baseModelToHeaderPlugin, err := basemodelextractor.NewBaseModelToHeaderPlugin(func() *builder.Builder {
-			return ctrl.NewControllerManagedBy(mgr)
-		}, mgr.GetClient())
-		if err != nil {
-			setupLog.Error(err, "failed to create plugin", "pluginType", basemodelextractor.BaseModelToHeaderPluginType)
-			return err
-		}
-
-		r.requestPlugins = append(r.requestPlugins, baseModelToHeaderPlugin)
-	} else {
-		setupLog.Info("plugins are specified, running with the specified plugins.")
-		handle := plugin.NewHandle(ctx, mgr, ds)
-		for _, s := range opts.PluginSpecs {
-			factory, ok := plugin.Registry[s.Type]
-			if !ok {
-				err := fmt.Errorf("unknown plugin type %q (no factory registered)", s.Type)
-				setupLog.Error(err, "Failed to find plugin factory", "pluginType", s.Type)
-				return err
-			}
-			instance, err := factory(s.Name, s.JSON, handle)
-			if err != nil {
-				setupLog.Error(err, fmt.Sprintf("invalid %s#%s: %v\n", s.Type, s.Name, err))
-				return err
-			}
-			if requestProcessor, ok := instance.(requesthandling.RequestProcessor); ok {
-				r.requestPlugins = append(r.requestPlugins, requestProcessor)
-			}
-			if responseProcessor, ok := instance.(requesthandling.ResponseProcessor); ok {
-				r.responsePlugins = append(r.responsePlugins, responseProcessor)
-			}
-		}
 	}
 
 	// Wire the request-metadata data pipeline: extractor → notification source.
