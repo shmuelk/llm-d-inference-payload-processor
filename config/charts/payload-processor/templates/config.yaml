@@ -1,0 +1,27 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Values.payloadProcessor.name }}
+  namespace: {{ .Release.Namespace }}
+data:
+  ipp-config.yaml: |
+    apiVersion: llm-d.ai/v1alpha1
+    kind: PayloadProcessorConfig
+    {{- if .Values.payloadProcessor.customConfig }}
+    {{- .Values.payloadProcessor.customConfig | toYaml | nindent 4 }}
+    {{- else }}
+    plugins:
+    - type: body-field-to-header
+      parameters:
+        fieldName: model
+        headerName: X-Gateway-Model-Name
+    - type: base-model-to-header
+    profiles:
+    - name: default
+      plugins:
+        request:
+        - pluginRef: body-field-to-header
+        - pluginRef: base-model-to-header
+    {{- end }}
+---
