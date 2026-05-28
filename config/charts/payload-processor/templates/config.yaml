@@ -5,12 +5,9 @@ metadata:
   name: {{ .Values.payloadProcessor.name }}
   namespace: {{ .Release.Namespace }}
 data:
-  ipp-config.yaml: |
+  default-ipp-config.yaml: |
     apiVersion: llm-d.ai/v1alpha1
     kind: PayloadProcessorConfig
-    {{- if .Values.payloadProcessor.customConfig }}
-    {{- .Values.payloadProcessor.customConfig | toYaml | nindent 4 }}
-    {{- else }}
     plugins:
     - type: body-field-to-header
       parameters:
@@ -23,5 +20,10 @@ data:
         request:
         - pluginRef: body-field-to-header
         - pluginRef: base-model-to-header
-    {{- end }}
+  {{- if .Values.payloadProcessor.customConfig }}
+  custom-ipp-config.yaml: |
+    apiVersion: llm-d.ai/v1alpha1
+    kind: PayloadProcessorConfig
+    {{- .Values.payloadProcessor.customConfig | toYaml | nindent 4 }}
+  {{- end }}
 ---

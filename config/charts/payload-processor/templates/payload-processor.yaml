@@ -20,7 +20,11 @@ spec:
         imagePullPolicy: {{ .Values.payloadProcessor.image.pullPolicy }}
         args:
         - --config-file
-        - "/config/ipp-config.yaml"
+        {{- if .Values.payloadProcessor.customConfig }}
+        - "config/custom-ipp-config.yaml"
+        {{- else }}
+        - "/config/default-ipp-config.yaml"
+        {{- end }}
         # Pass additional flags via the payloadProcessor.flags field in values.yaml.
         {{- range $key, $value := .Values.payloadProcessor.flags }}
         - --{{ $key }}={{ $value }}
