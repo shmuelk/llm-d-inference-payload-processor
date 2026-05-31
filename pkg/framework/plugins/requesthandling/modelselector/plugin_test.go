@@ -19,6 +19,7 @@ package modelselector
 import (
 	"context"
 	"encoding/json"
+	"slices"
 	"strings"
 	"testing"
 
@@ -75,116 +76,130 @@ func newFakeHandle(modelNames ...string) *fakeHandle {
 	}
 }
 
+// mustFactory calls ModelSelectorPluginFactory and fails the test on error.
+func mustFactory(t *testing.T, parameters json.RawMessage, handle *fakeHandle) *ModelSelectorPlugin {
+	t.Helper()
+	plug, err := ModelSelectorPluginFactory(ModelSelectorPluginType, parameters, handle)
+	if err != nil {
+		t.Fatalf("ModelSelectorPluginFactory failed: %v", err)
+	}
+	return plug.(*ModelSelectorPlugin)
+}
+
+// profileString returns the profile string of a ModelSelectorPlugin for assertion.
+func profileString(p *ModelSelectorPlugin) string {
+	return p.selector.ProfileString()
+}
+
 // TestProcessRequestSelectsFromDatastoreModels checks that the selected model is one of the candidates registered in the datastore.
 func TestProcessRequestSelectsFromDatastoreModels(t *testing.T) {
 	candidates := []string{"llama-70b", "llama-8b", "mistral-7b"}
-	plugin, err := ModelSelectorPluginFactory(ModelSelectorPluginType, json.RawMessage(`{}`), newFakeHandle(candidates...))
-	if err != nil {
-		t.Fatalf("failed to create plugin: %v", err)
-	}
-	p := plugin.(*ModelSelectorPlugin)
+	p := mustFactory(t, json.RawMessage(`{}`), newFakeHandle(candidates...))
 
 	request := requesthandling.NewInferenceRequest()
 	request.Body["model"] = "auto"
 	cycleState := fwkplugin.NewCycleState()
 
-	err = p.ProcessRequest(context.Background(), cycleState, request)
-	if err != nil {
+	if err := p.ProcessRequest(context.Background(), cycleState, request); err != nil {
 		t.Fatalf("ProcessRequest failed: %v", err)
 	}
 
 	selectedModel := request.Body["model"].(string)
-	found := false
-	for _, c := range candidates {
-		if c == selectedModel {
-			found = true
-			break
-		}
-	}
-	if !found {
+	if !slices.Contains(candidates, selectedModel) {
 		t.Errorf("selected model %q is not in datastore models %v", selectedModel, candidates)
 	}
 }
 
 // TestProcessRequestFailsWithEmptyDatastore checks that ProcessRequest returns an error when no candidate models are available.
 func TestProcessRequestFailsWithEmptyDatastore(t *testing.T) {
-	plugin, err := ModelSelectorPluginFactory(ModelSelectorPluginType, json.RawMessage(`{}`), newFakeHandle())
-	if err != nil {
-		t.Fatalf("failed to create plugin: %v", err)
-	}
-	p := plugin.(*ModelSelectorPlugin)
+	p := mustFactory(t, json.RawMessage(`{}`), newFakeHandle())
 
 	request := requesthandling.NewInferenceRequest()
 	request.Body["model"] = "auto"
 	cycleState := fwkplugin.NewCycleState()
 
-	err = p.ProcessRequest(context.Background(), cycleState, request)
-	if err == nil {
+	if err := p.ProcessRequest(context.Background(), cycleState, request); err == nil {
 		t.Fatal("expected error with empty datastore")
 	}
 }
 
 // TestTypedName checks that the plugin's TypedName type matches the registered ModelSelectorPluginType constant.
 func TestTypedName(t *testing.T) {
-	thePlugin, _ := ModelSelectorPluginFactory(ModelSelectorPluginType, json.RawMessage(`{}`), newFakeHandle("model-a"))
+	thePlugin := mustFactory(t, json.RawMessage(`{}`), newFakeHandle("model-a"))
 	if thePlugin.TypedName().Type != ModelSelectorPluginType {
 		t.Errorf("expected type %q, got %q", ModelSelectorPluginType, thePlugin.TypedName().Type)
 	}
 }
 
-// TestBuildProfileUsesDefaultMaxScorePickerWhenNoPickerInHandle checks that MaxScorePicker is used as the default picker when no picker plugin is in the handle.
-func TestBuildProfileUsesDefaultMaxScorePickerWhenNoPickerInHandle(t *testing.T) {
-	handle := newFakeHandle("model-a")
-	profile, err := buildModelSelectorProfile(handle)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	profileStr := profile.String()
-	if !containsSubstring(profileStr, maxscore.MaxScorePickerType) {
-		t.Errorf("expected default picker type %q in profile %q", maxscore.MaxScorePickerType, profileStr)
+// TestFactoryUsesDefaultMaxScorePickerWhenNoPluginsConfigured checks that MaxScorePicker is used as the default when plugins list is empty.
+func TestFactoryUsesDefaultMaxScorePickerWhenNoPluginsConfigured(t *testing.T) {
+	thePlugin := mustFactory(t, json.RawMessage(`{}`), newFakeHandle("model-a"))
+	if !containsSubstring(profileString(thePlugin), maxscore.MaxScorePickerType) {
+		t.Errorf("expected default picker type %q in profile %q", maxscore.MaxScorePickerType, profileString(thePlugin))
 	}
 }
 
-// TestBuildProfileWiresScorerFromHandle checks that a scorer plugin registered in the handle is added to the profile.
-func TestBuildProfileWiresScorerFromHandle(t *testing.T) {
+// TestFactoryWiresScorerFromParameters checks that a scorer plugin referenced in parameters is added to the profile with the given weight.
+func TestFactoryWiresScorerFromParameters(t *testing.T) {
 	scorer := costaware.NewCostScorer()
 	handle := newFakeHandle("model-a", "model-b")
 	handle.AddPlugin(scorer.TypedName().Name, scorer)
-	profile, err := buildModelSelectorProfile(handle)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	profileStr := profile.String()
-	if !containsSubstring(profileStr, costaware.CostScorerType) {
-		t.Errorf("expected scorer type %q in profile %q", costaware.CostScorerType, profileStr)
+
+	p := mustFactory(t, json.RawMessage(`{"plugins":[{"pluginRef":"cost-scorer","weight":2.0}]}`), handle)
+	if !containsSubstring(profileString(p), costaware.CostScorerType) {
+		t.Errorf("expected scorer type %q in profile %q", costaware.CostScorerType, profileString(p))
 	}
 }
 
-// TestBuildProfileWiresPickerFromHandle checks that a picker plugin registered in the handle is used instead of the default.
-func TestBuildProfileWiresPickerFromHandle(t *testing.T) {
+// TestFactoryWiresPickerFromParameters checks that a picker plugin referenced in parameters is used instead of the default.
+func TestFactoryWiresPickerFromParameters(t *testing.T) {
 	picker := maxscore.NewMaxScorePicker()
 	handle := newFakeHandle("model-a")
 	handle.AddPlugin(picker.TypedName().Name, picker)
-	profile, err := buildModelSelectorProfile(handle)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	profileStr := profile.String()
-	if !containsSubstring(profileStr, maxscore.MaxScorePickerType) {
-		t.Errorf("expected picker type %q in profile %q", maxscore.MaxScorePickerType, profileStr)
+
+	p := mustFactory(t, json.RawMessage(`{"plugins":[{"pluginRef":"max-score-picker"}]}`), handle)
+	if !containsSubstring(profileString(p), maxscore.MaxScorePickerType) {
+		t.Errorf("expected picker type %q in profile %q", maxscore.MaxScorePickerType, profileString(p))
 	}
 }
 
-// TestBuildProfileRejectsMultiplePickers checks that registering more than one picker plugin in the handle returns an error.
-func TestBuildProfileRejectsMultiplePickers(t *testing.T) {
+// TestFactoryRejectsMultiplePickers checks that referencing more than one picker plugin in parameters returns an error.
+func TestFactoryRejectsMultiplePickers(t *testing.T) {
 	p1 := maxscore.NewMaxScorePicker().WithName("picker-1")
 	p2 := maxscore.NewMaxScorePicker().WithName("picker-2")
 	handle := newFakeHandle("model-a")
 	handle.AddPlugin("picker-1", p1)
 	handle.AddPlugin("picker-2", p2)
-	_, err := buildModelSelectorProfile(handle)
+
+	_, err := ModelSelectorPluginFactory(ModelSelectorPluginType,
+		json.RawMessage(`{"plugins":[{"pluginRef":"picker-1"},{"pluginRef":"picker-2"}]}`),
+		handle)
 	if err == nil {
-		t.Fatal("expected error when two picker plugins are registered")
+		t.Fatal("expected error when two picker plugins are configured")
+	}
+}
+
+// TestFactoryRejectsScorerWithoutWeight checks that a scorer pluginRef without a weight returns an error.
+func TestFactoryRejectsScorerWithoutWeight(t *testing.T) {
+	scorer := costaware.NewCostScorer()
+	handle := newFakeHandle("model-a")
+	handle.AddPlugin(scorer.TypedName().Name, scorer)
+
+	_, err := ModelSelectorPluginFactory(ModelSelectorPluginType,
+		json.RawMessage(`{"plugins":[{"pluginRef":"cost-scorer"}]}`),
+		handle)
+	if err == nil {
+		t.Fatal("expected error when scorer has no weight")
+	}
+}
+
+// TestFactoryRejectsUnknownPluginRef checks that referencing a plugin not in the handle returns an error.
+func TestFactoryRejectsUnknownPluginRef(t *testing.T) {
+	_, err := ModelSelectorPluginFactory(ModelSelectorPluginType,
+		json.RawMessage(`{"plugins":[{"pluginRef":"nonexistent-plugin"}]}`),
+		newFakeHandle("model-a"))
+	if err == nil {
+		t.Fatal("expected error for unknown pluginRef")
 	}
 }
 
@@ -206,18 +221,15 @@ func (f *fakeScorerFilter) Filter(_ context.Context, _ *fwkplugin.CycleState, _ 
 var _ modelselector.Scorer = &fakeScorerFilter{}
 var _ modelselector.Filter = &fakeScorerFilter{}
 
-// TestBuildProfilePluginImplementingBothScorerAndFilter checks that a plugin implementing both Scorer and Filter is registered in both roles within the profile.
-func TestBuildProfilePluginImplementingBothScorerAndFilter(t *testing.T) {
+// TestFactoryPluginImplementingBothScorerAndFilter checks that a plugin implementing both Scorer and Filter is registered in both roles.
+func TestFactoryPluginImplementingBothScorerAndFilter(t *testing.T) {
 	dual := &fakeScorerFilter{typedName: fwkplugin.TypedName{Type: "dual", Name: "dual"}}
 	handle := newFakeHandle("model-a")
 	handle.AddPlugin("dual", dual)
-	profile, err := buildModelSelectorProfile(handle)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	profileStr := profile.String()
-	if !containsSubstring(profileStr, "dual") {
-		t.Errorf("expected dual plugin in profile %q", profileStr)
+
+	p := mustFactory(t, json.RawMessage(`{"plugins":[{"pluginRef":"dual","weight":1.0}]}`), handle)
+	if !containsSubstring(profileString(p), "dual") {
+		t.Errorf("expected dual plugin in profile %q", profileString(p))
 	}
 }
 

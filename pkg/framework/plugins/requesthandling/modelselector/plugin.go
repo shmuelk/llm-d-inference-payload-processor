@@ -35,16 +35,17 @@ import (
 
 const (
 	ModelSelectorPluginType = "model-selector"
-
-	// CycleState key where the selected model name is stored for downstream plugins.
-	SelectedModelKey = "selected-model"
 )
 
 var _ requesthandling.RequestProcessor = &ModelSelectorPlugin{}
 
 // ModelSelectorPluginFactory is the factory function for the ModelSelector RequestProcessor plugin.
-func ModelSelectorPluginFactory(name string, _ json.RawMessage, handle plugin.Handle) (plugin.Plugin, error) {
-	profile, err := buildModelSelectorProfile(handle)
+func ModelSelectorPluginFactory(name string, parameters json.RawMessage, handle plugin.Handle) (plugin.Plugin, error) {
+	cfg, err := parseConfig(parameters)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse model-selector config: %w", err)
+	}
+	profile, err := buildModelSelectorProfile(handle, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build model selector profile: %w", err)
 	}
@@ -63,17 +64,24 @@ func NewModelSelectorPlugin(profile *ms.ModelSelectorProfile, datastore datalaye
 	}
 }
 
-// buildModelSelectorProfile inspects all plugins in the handle and adds them to the profile
-// via AddPlugins. Scorers are pre-wrapped with a default weight of 1.0 as required by AddPlugins.
-// If no Picker plugin is found, MaxScorePicker is used as the default.
-func buildModelSelectorProfile(handle plugin.Handle) (*ms.ModelSelectorProfile, error) {
+// buildModelSelectorProfile builds a ModelSelectorProfile from the given config.
+// Each pluginRef is resolved via the handle. Scorers must specify a weight.
+// If no Picker is configured, MaxScorePicker is used as the default.
+func buildModelSelectorProfile(handle plugin.Handle, cfg *ModelSelectorPluginConfig) (*ms.ModelSelectorProfile, error) {
 	profile := ms.NewModelSelectorProfile()
 
 	var hasPicker bool
 	var pluginsToAdd []plugin.Plugin
-	for _, plug := range handle.GetAllPlugins() {
+	for _, ref := range cfg.Plugins {
+		plug := handle.Plugin(ref.PluginRef)
+		if plug == nil {
+			return nil, fmt.Errorf("plugin %q not found in handle", ref.PluginRef)
+		}
 		if s, ok := plug.(modelselector.Scorer); ok {
-			pluginsToAdd = append(pluginsToAdd, ms.NewWeightedScorer(s, 1.0))
+			if ref.Weight == nil {
+				return nil, fmt.Errorf("scorer %q requires a weight", ref.PluginRef)
+			}
+			pluginsToAdd = append(pluginsToAdd, ms.NewWeightedScorer(s, *ref.Weight))
 		} else {
 			pluginsToAdd = append(pluginsToAdd, plug)
 		}
