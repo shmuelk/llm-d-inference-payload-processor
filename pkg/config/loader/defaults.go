@@ -73,9 +73,12 @@ func applyRawConfigDefaults(rawConfig *configapi.PayloadProcessorConfig) {
 func applyPluginDefaults(rawConfig *configapi.PayloadProcessorConfig, handle plugin.Handle) error {
 	if rawConfig.ProfilePicker == nil || rawConfig.ProfilePicker.PluginRef == "" {
 		var profilePicker requesthandling.ProfilePicker
-		var ok bool
 		for _, rawPlugin := range handle.GetAllPlugins() {
-			if profilePicker, ok = rawPlugin.(requesthandling.ProfilePicker); ok {
+			if aProfilePicker, ok := rawPlugin.(requesthandling.ProfilePicker); ok {
+				if profilePicker != nil {
+					return errors.New("multiple profile pickers have been defined in the configuration")
+				}
+				profilePicker = aProfilePicker
 				break
 			}
 		}
