@@ -87,7 +87,7 @@ func applyPluginDefaults(rawConfig *configapi.PayloadProcessorConfig, handle plu
 				}
 				profilePicker = handle.Plugin(single.SingleProfilePickerType).(requesthandling.ProfilePicker)
 			} else {
-				return errors.New("more than one profile in the configuration without a profile picker")
+				return errors.New("multiple profiles in the configuration require a profile picker")
 			}
 		}
 
