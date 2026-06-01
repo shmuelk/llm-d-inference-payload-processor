@@ -79,7 +79,6 @@ func applyPluginDefaults(rawConfig *configapi.PayloadProcessorConfig, handle plu
 					return errors.New("multiple profile pickers have been defined in the configuration")
 				}
 				profilePicker = aProfilePicker
-				break
 			}
 		}
 
