@@ -151,12 +151,12 @@ func instantiatePlugins(configuredPlugins []configapi.PluginSpec, handle plugin.
 	return nil
 }
 
-func buildProfiles(rawProfiles []configapi.Profile, handle plugin.Handle) (map[string]requesthandling.Profile, error) {
+func buildProfiles(rawProfiles []configapi.Profile, handle plugin.Handle) (map[string]*requesthandling.Profile, error) {
 	if len(rawProfiles) == 0 {
 		return nil, errors.New("at least one profile must be specified")
 	}
 
-	profiles := map[string]requesthandling.Profile{}
+	profiles := map[string]*requesthandling.Profile{}
 
 	for _, rawProfile := range rawProfiles {
 		if len(rawProfile.Name) == 0 {
@@ -198,7 +198,7 @@ func buildProfiles(rawProfiles []configapi.Profile, handle plugin.Handle) (map[s
 			theProfile.ResponsePlugins[idx] = thePlugin
 		}
 
-		profiles[rawProfile.Name] = theProfile
+		profiles[rawProfile.Name] = &theProfile
 	}
 
 	return profiles, nil

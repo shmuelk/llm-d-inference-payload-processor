@@ -224,13 +224,13 @@ func TestBuildProfiles(t *testing.T) {
 	tests := []struct {
 		name       string
 		configText string
-		validate   func(*testing.T, *configapi.PayloadProcessorConfig, map[string]requesthandling.Profile, plugin.Handle)
+		validate   func(*testing.T, *configapi.PayloadProcessorConfig, map[string]*requesthandling.Profile, plugin.Handle)
 		wantErr    bool
 	}{
 		{
 			name:       "successConfigWithProfile",
 			configText: successConfigWithProfileText,
-			validate: func(t *testing.T, rawConfig *configapi.PayloadProcessorConfig, profiles map[string]requesthandling.Profile, handle plugin.Handle) {
+			validate: func(t *testing.T, rawConfig *configapi.PayloadProcessorConfig, profiles map[string]*requesthandling.Profile, handle plugin.Handle) {
 				require.Equal(t, rawConfig.ProfilePicker.PluginRef, testProfilePicker, "incorrect profile picker")
 				require.Equal(t, 1, len(profiles), "there should only be one profile")
 				require.NotNil(t, profiles["default"], "the profile `default` wasn't created")
@@ -242,7 +242,7 @@ func TestBuildProfiles(t *testing.T) {
 		{
 			name:       "successConfigWithTwoProfiles",
 			configText: successConfigWithTwoProfilesText,
-			validate: func(t *testing.T, rawConfig *configapi.PayloadProcessorConfig, profiles map[string]requesthandling.Profile, handle plugin.Handle) {
+			validate: func(t *testing.T, rawConfig *configapi.PayloadProcessorConfig, profiles map[string]*requesthandling.Profile, handle plugin.Handle) {
 				require.Equal(t, rawConfig.ProfilePicker.PluginRef, testProfilePicker, "incorrect profile picker")
 				require.Equal(t, 2, len(profiles), "there should be two profiles")
 				require.NotNil(t, profiles["one"], "the profile `one` wasn't created")
@@ -257,7 +257,7 @@ func TestBuildProfiles(t *testing.T) {
 		{
 			name:       "successConfigWithNoProfilePicker",
 			configText: successConfigWithNoProfilePickerText,
-			validate: func(t *testing.T, rawConfig *configapi.PayloadProcessorConfig, profiles map[string]requesthandling.Profile, handle plugin.Handle) {
+			validate: func(t *testing.T, rawConfig *configapi.PayloadProcessorConfig, profiles map[string]*requesthandling.Profile, handle plugin.Handle) {
 				require.Equal(t, rawConfig.ProfilePicker.PluginRef, single.SingleProfilePickerType, "incorrect profile picker")
 				require.Equal(t, 3, len(handle.GetAllPlugins()), "not enough plugins were instantiated")
 				require.Equal(t, 1, len(profiles), "there should only be one profile")
@@ -270,7 +270,7 @@ func TestBuildProfiles(t *testing.T) {
 		{
 			name:       "successConfigWithProfilePickerNotReferenced",
 			configText: successConfigWithProfilePickerNotReferencedText,
-			validate: func(t *testing.T, rawConfig *configapi.PayloadProcessorConfig, profiles map[string]requesthandling.Profile, handle plugin.Handle) {
+			validate: func(t *testing.T, rawConfig *configapi.PayloadProcessorConfig, profiles map[string]*requesthandling.Profile, handle plugin.Handle) {
 				require.Equal(t, rawConfig.ProfilePicker.PluginRef, testProfilePicker, "incorrect profile picker")
 				require.Equal(t, 1, len(profiles), "there should only be one profile")
 				require.NotNil(t, profiles["default"], "the profile `default` wasn't created")
