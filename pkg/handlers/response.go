@@ -59,7 +59,7 @@ func (s *Server) HandleResponseHeaders(ctx context.Context, reqCtx *RequestConte
 // HandleResponseBody handles response bodies by executing response plugins in order.
 func (s *Server) HandleResponseBody(ctx context.Context, reqCtx *RequestContext, responseBodyBytes []byte) ([]*eppb.ProcessingResponse, error) {
 	logger := log.FromContext(ctx)
-	if len(s.responsePlugins) == 0 {
+	if len(reqCtx.Profile.ResponsePlugins) == 0 {
 		return s.generateEmptyResponseBodyResponse(responseBodyBytes), nil
 	}
 
@@ -68,7 +68,7 @@ func (s *Server) HandleResponseBody(ctx context.Context, reqCtx *RequestContext,
 		return s.generateEmptyResponseBodyResponse(responseBodyBytes), nil
 	}
 
-	if err := s.runResponsePlugins(ctx, reqCtx.CycleState, reqCtx.Response); err != nil {
+	if err := s.runResponsePlugins(ctx, reqCtx.CycleState, reqCtx.Response, reqCtx.Profile); err != nil {
 		return nil, err
 	}
 
@@ -131,7 +131,7 @@ func (s *Server) HandleResponseTrailers(trailers *eppb.HttpTrailers) ([]*eppb.Pr
 }
 
 // runResponsePlugins executes response plugins in the order they were registered.
-func (s *Server) runResponsePlugins(ctx context.Context, cycleState *plugin.CycleState, response *requesthandling.InferenceResponse) error {
+func (s *Server) runResponsePlugins(ctx context.Context, cycleState *plugin.CycleState, response *requesthandling.InferenceResponse, profile *requesthandling.Profile) error {
 	logger := log.FromContext(ctx).V(logutil.DEFAULT)
 
 	// Cache verbose logger and check Enabled() once to avoid per-iteration
@@ -140,7 +140,7 @@ func (s *Server) runResponsePlugins(ctx context.Context, cycleState *plugin.Cycl
 	verboseEnabled := verboseLogger.Enabled()
 
 	var err error
-	for _, plugin := range s.responsePlugins {
+	for _, plugin := range profile.ResponsePlugins {
 		if verboseEnabled {
 			verboseLogger.Info("Executing response plugin", "plugin", plugin.TypedName())
 		}
