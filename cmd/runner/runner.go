@@ -71,7 +71,7 @@ func NewRunner() *Runner {
 // Runner is used to run payload processor with its plugins
 type Runner struct {
 	payloadProcessorExecutableName string
-	// profilePicker is the profile picker instatiated as specified in the configuration
+	// profilePicker is the profile picker instantiated as specified in the configuration
 	profilePicker requesthandling.ProfilePicker
 	// profiles is the set of named profiles loaded from the configuration
 	profiles map[string]*requesthandling.Profile
