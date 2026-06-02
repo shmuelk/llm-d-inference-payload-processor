@@ -171,12 +171,47 @@ func TestHandleResponseBody_Streaming(t *testing.T) {
 				testListener.Close()
 			}()
 
+			request := &extProcPb.ProcessingRequest{
+				Request: &extProcPb.ProcessingRequest_RequestHeaders{},
+			}
+			if err := process.Send(request); err != nil {
+				t.Fatalf("send request headers: %v", err)
+			}
+
+			request = &extProcPb.ProcessingRequest{
+				Request: &extProcPb.ProcessingRequest_RequestBody{
+					RequestBody: &extProcPb.HttpBody{
+						Body:        []byte("{\"model\":\"testing\"}"),
+						EndOfStream: true,
+					},
+				},
+			}
+			if err := process.Send(request); err != nil {
+				t.Fatalf("send request body: %v", err)
+			}
+
+			msg, err := process.Recv()
+			if err != nil {
+				t.Fatalf("receive error: %v", err)
+			}
+			if msg.GetRequestHeaders() == nil {
+				t.Fatalf("Didn't receive the Processing_Response for Request Headers")
+			}
+
+			msg, err = process.Recv()
+			if err != nil {
+				t.Fatalf("receive error: %v", err)
+			}
+			if msg.GetRequestBody() == nil {
+				t.Fatalf("Didn't receive the Processing_Response for Request Body")
+			}
+
 			respHeaders := utils.BuildEnvoyGRPCHeaders(map[string]string{
 				"x-test":       "body",
 				":method":      "POST",
 				"content-type": "text/event-stream",
 			}, true)
-			request := &extProcPb.ProcessingRequest{
+			request = &extProcPb.ProcessingRequest{
 				Request: &extProcPb.ProcessingRequest_ResponseHeaders{
 					ResponseHeaders: respHeaders,
 				},
