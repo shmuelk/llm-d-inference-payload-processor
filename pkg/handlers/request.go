@@ -72,7 +72,7 @@ func (s *Server) HandleRequestBody(ctx context.Context, reqCtx *RequestContext, 
 	if err != nil {
 		return nil, errcommon.Error{Code: errcommon.Internal, Msg: fmt.Sprintf("failed to pick a profile: %v", err)}
 	}
-	if err := s.runRequestPlugins(ctx, reqCtx.CycleState, reqCtx.Request, reqCtx.Profile); err != nil {
+	if err := s.runRequestPlugins(ctx, reqCtx.CycleState, reqCtx.Request, reqCtx.Profile.RequestPlugins); err != nil {
 		return nil, err
 	}
 
@@ -115,7 +115,7 @@ func (s *Server) HandleRequestBody(ctx context.Context, reqCtx *RequestContext, 
 
 // runRequestPlugins executes request plugins in the order they were registered.
 func (s *Server) runRequestPlugins(ctx context.Context, cycleState *plugin.CycleState, request *requesthandling.InferenceRequest,
-	profile *requesthandling.Profile) error {
+	reqPlugins []requesthandling.RequestProcessor) error {
 	logger := log.FromContext(ctx).V(logutil.DEFAULT)
 
 	// Cache verbose logger and check Enabled() once to avoid per-iteration
@@ -123,15 +123,15 @@ func (s *Server) runRequestPlugins(ctx context.Context, cycleState *plugin.Cycle
 	verboseLogger := logger.V(logutil.VERBOSE)
 	verboseEnabled := verboseLogger.Enabled()
 
-	for _, plugin := range profile.RequestPlugins {
+	for _, reqPlugin := range reqPlugins {
 		if verboseEnabled {
-			verboseLogger.Info("Executing request plugin", "plugin", plugin.TypedName())
+			verboseLogger.Info("Executing request plugin", "plugin", reqPlugin.TypedName())
 		}
 		before := time.Now()
-		err := plugin.ProcessRequest(ctx, cycleState, request)
-		metrics.RecordPluginProcessingLatency(requestPluginExtensionPoint, plugin.TypedName().Type, plugin.TypedName().Name, time.Since(before))
+		err := reqPlugin.ProcessRequest(ctx, cycleState, request)
+		metrics.RecordPluginProcessingLatency(requestPluginExtensionPoint, reqPlugin.TypedName().Type, reqPlugin.TypedName().Name, time.Since(before))
 		if err != nil {
-			logger.Error(err, "Failed to execute request plugin", "plugin", plugin.TypedName())
+			logger.Error(err, "Failed to execute request plugin", "plugin", reqPlugin.TypedName())
 			return err
 		}
 	}
