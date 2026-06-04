@@ -74,6 +74,18 @@ func LoadConfiguration(configBytes []byte, handle plugin.Handle, logger logr.Log
 		return nil, err
 	}
 
+	preProcessors, err := buildPreProcessors(rawConfig.PreProcessing, handle)
+	if err != nil {
+		logger.Error(err, "failed to load one or more pre-processors")
+		return nil, err
+	}
+
+	postProcessors, err := buildPostProcessors(rawConfig.PostProcessing, handle)
+	if err != nil {
+		logger.Error(err, "failed to load one or more post-processors")
+		return nil, err
+	}
+
 	notificationSources, err := buildNotificationSources(rawConfig.NotificationSources, handle)
 	if err != nil {
 		logger.Error(err, "failed to load one or more notification sources")
@@ -83,7 +95,9 @@ func LoadConfiguration(configBytes []byte, handle plugin.Handle, logger logr.Log
 	pollingSources, err := buildPollingSources(rawConfig.PollingSources, handle)
 	if err != nil {
 		logger.Error(err, "failed to load one or more polling sources")
+		return nil, err
 	}
+
 	if err = buildModelSelector(profiles, handle); err != nil {
 		logger.Error(err, "failed to build model selector profiles")
 		return nil, err
@@ -92,6 +106,8 @@ func LoadConfiguration(configBytes []byte, handle plugin.Handle, logger logr.Log
 	return &config.Config{
 		ProfilePicker:       profilePicker,
 		Profiles:            profiles,
+		PreProcessors:       preProcessors,
+		PostProcessors:      postProcessors,
 		NotificationSources: notificationSources,
 		PollingSources:      pollingSources,
 	}, nil
@@ -246,6 +262,50 @@ func buildProfiles(rawProfiles []configapi.Profile, handle plugin.Handle) (map[s
 	}
 
 	return profiles, nil
+}
+
+func buildPreProcessors(rawConfig *configapi.PluginRefList, handle plugin.Handle) ([]requesthandling.PreProcessor, error) {
+	if rawConfig == nil || len(rawConfig.Plugins) == 0 {
+		return []requesthandling.PreProcessor{}, nil
+	}
+
+	preProcessors := make([]requesthandling.PreProcessor, len(rawConfig.Plugins))
+
+	for idx, pluginRef := range rawConfig.Plugins {
+		rawPlugin := handle.Plugin(pluginRef.PluginRef)
+		if rawPlugin == nil {
+			return nil, fmt.Errorf("the referenced pre-processor plugin %s doesn't exist in the configuration", pluginRef.PluginRef)
+		}
+		if preProcessor, ok := rawPlugin.(requesthandling.PreProcessor); ok {
+			preProcessors[idx] = preProcessor
+		} else {
+			return nil, fmt.Errorf("the referenced plugin %s is not a pre-processor", pluginRef.PluginRef)
+		}
+	}
+
+	return preProcessors, nil
+}
+
+func buildPostProcessors(rawConfig *configapi.PluginRefList, handle plugin.Handle) ([]requesthandling.PostProcessor, error) {
+	if rawConfig == nil || len(rawConfig.Plugins) == 0 {
+		return []requesthandling.PostProcessor{}, nil
+	}
+
+	postProcessors := make([]requesthandling.PostProcessor, len(rawConfig.Plugins))
+
+	for idx, pluginRef := range rawConfig.Plugins {
+		rawPlugin := handle.Plugin(pluginRef.PluginRef)
+		if rawPlugin == nil {
+			return nil, fmt.Errorf("the referenced post-processor plugin %s doesn't exist in the configuration", pluginRef.PluginRef)
+		}
+		if postProcessor, ok := rawPlugin.(requesthandling.PostProcessor); ok {
+			postProcessors[idx] = postProcessor
+		} else {
+			return nil, fmt.Errorf("the referenced plugin %s is not a post-processor", pluginRef.PluginRef)
+		}
+	}
+
+	return postProcessors, nil
 }
 
 // buildModelSelector iterates all built profiles and, for each model-selector plugin found in
