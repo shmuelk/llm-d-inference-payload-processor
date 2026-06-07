@@ -315,7 +315,7 @@ func TestBuildProfiles(t *testing.T) {
 			profiles, errProf := buildProfiles(rawConfig.Profiles, handle)
 			if tc.wantErr {
 				if err == nil && errProf == nil {
-					t.Logf("either applyPluginDefaults or buildProfiles was suppose to fail")
+					t.Errorf("either applyPluginDefaults or buildProfiles was suppose to fail")
 				}
 				return
 			}
@@ -395,7 +395,7 @@ func TestBuildPreAndPostProcessors(t *testing.T) {
 
 			if tc.wantErr {
 				if preErr == nil && postErr == nil {
-					t.Logf("either buildPreProcessors or buildPostProcessors was suppose to fail")
+					t.Errorf("either buildPreProcessors or buildPostProcessors was suppose to fail")
 				}
 				t.Log("preErr=", preErr)
 				t.Log("postErr=", postErr)
