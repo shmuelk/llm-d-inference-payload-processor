@@ -275,8 +275,6 @@ kind: PayloadProcessorConfig
 plugins:
 - type: test-request-processor
 - type: test-response-processor
-profilePicker:
-  pluginRef: test-profile-picker
 profiles:
 - name: one
   plugins:
